@@ -1,0 +1,123 @@
+local module = {}
+
+local serverStorage = game:GetService("ServerStorage")
+local serverScriptService = game:GetService("ServerScriptService")
+local repstore = game:GetService("ReplicatedStorage")
+local debris = game:GetService("Debris")
+
+local modules = serverScriptService.Modules
+local remotes = repstore.Remotes
+local events = serverScriptService.Events
+local questModules = serverScriptService.QuestModules
+local assets = serverStorage.Assets
+
+local questItems = workspace.Quests
+local specificItems = workspace.Quests[script.Name]
+
+local cooldowns = require(game.ReplicatedStorage.Modules.Cooldowns)
+local shared = require(repstore.Modules.Shared)
+
+
+module.questInfo = {
+	Experience = 50
+	
+}
+
+
+
+
+
+
+
+
+
+
+module.connectQuest = function(player)
+	local char = player.Character
+	
+	local status = char:FindFirstChild("Status")
+	local completion = char.Data.Quests.Completion
+	
+	local hum = char.Humanoid
+	local animator = hum:FindFirstChildOfClass("Animator")
+	local broom = assets.Broom:Clone()
+	local broomEquip = assets.Broom:Clone()
+	
+	broom.Weld.Part1 = char.Torso
+	broom.Weld.C1 = CFrame.new(0, 0, 0.550000012, -4.37113883e-08, -0.707106769, 0.707106769, 0, 0.707106769, 0.707106769, -1, 3.09086197e-08, -3.09086197e-08)
+	broom.Parent = char
+	
+	broomEquip.BroomEquip.Part0 = char["Right Arm"]
+	broomEquip.BroomEquip.C1 = CFrame.new(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+	broomEquip.Transparency = 1
+	broomEquip.Name = "BroomEquip"
+	broomEquip.Parent = char	
+end
+
+module.connectFinish = function(player)
+	local char = player.Character
+	
+	
+	char.Broom:Destroy()
+	char.BroomEquip:Destroy()
+	
+	local character = player.Character
+	local questInfo = require(game.ReplicatedStorage.Modules.QuestInfo)
+	local completion = character.Data.Quests.Completion
+	local toComplete = questInfo.Quests[script.Name][character.Data.Quests.Stage.Value].Completion
+	if completion.Value == toComplete then
+		_G.Experience(player, module.questInfo.Experience)
+	end
+end
+
+module.connectDirt = function(dirt)
+	dirt.Prompt.PromptButtonHoldBegan:Connect(function(player)
+		local char = player.Character
+		
+		if char.Data.Quests.Quest.Value ~= "SweepFloor" then
+			remotes.Notify:FireClient(player, {
+				Text = [[<font color="rgb(255,0,0)"> [!] </font> You must have a broom to clean.]],
+				Sound = "Fail",
+				Duration = 4
+			})
+			return
+		end
+		
+		local hum = char.Humanoid
+		local animator = hum:FindFirstChildOfClass("Animator")
+		
+		local broom = char.Broom
+		local broomEquip = char.BroomEquip
+		
+		if char.Data.Cooldowns:FindFirstChild("Broom") then return end
+		cooldowns:SetCooldown("Broom", char, 4)
+
+
+		local sweepAnim = animator:LoadAnimation(script.Sweep)
+		broom.Transparency = 1
+		broomEquip.Transparency = 0
+
+		shared.StunManager(char,2.1)
+		hum.WalkSpeed = 0
+		hum.AutoRotate = false
+		sweepAnim:Play()
+		sweepAnim.Stopped:Wait()
+		broom.Transparency = 0
+		broomEquip.Transparency = 1
+		hum.AutoRotate = true
+
+
+		events.QuestProgression:Fire(player, script.Name)
+		
+		dirt.Decal.Transparency = 1
+		dirt.Prompt.Enabled = false
+		
+		task.wait(6)
+		
+		dirt.Decal.Transparency = 0
+		dirt.Prompt.Enabled = true
+	end)
+end
+
+
+return module
