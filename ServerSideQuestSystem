@@ -1,0 +1,148 @@
+local serverStorage = game:GetService("ServerStorage")
+local serverScriptService = game:GetService("ServerScriptService")
+local repstore = game:GetService("ReplicatedStorage")
+
+local events = serverScriptService.Events
+local remotes = repstore.Remotes
+local questModules = serverScriptService.QuestModules
+local questInfo = require(repstore.Modules.QuestInfo)
+
+
+
+local validActions = {
+	["Start"] = true,
+	["Cancel"] = true,
+}
+
+local QuestFunctions = {}
+
+local currentQuestValue
+
+QuestFunctions.Start = function(player, action, data)
+	local char = player.Character
+	local status = char.Status
+	local characterData = char.Data
+	local plrGui = player.PlayerGui
+	local questGui = plrGui.QuestInfo
+
+	local quest = data.quest
+	local questModule = require(questModules[quest])
+	print(quest.." started")
+
+	
+	--[[currentQuestValue.Changed:connect(function(value)
+		print(value)
+		if value == questInfo.Quests[quest].Completion then
+			QuestFunctions.Finish(player, action, data)
+		end
+	end)]]
+
+	questModule.connectQuest(player)
+	
+	questGui.QuestName.TextBox.Text = questInfo.Quests[quest][1].Title
+	questGui.Description.TextBox.Text = questInfo.Quests[quest][1].Description
+	questGui.TimeRemaining.TextBox.Text = questInfo.Quests[quest][1].Time
+	questGui.Completion.TextBox.Text = "0/"..questInfo.Quests[quest][1].Completion
+	questGui.Enabled = true
+	
+	local questCountdown = characterData.Quests.QuestTimer
+	questCountdown.Value = questInfo.Quests[quest][1].Time
+	characterData.Quests.Quest.Value = quest
+	characterData.Quests.Stage.Value = 1
+	
+	char.Events.QuestClient:FireClient(player, quest, "Create")
+	
+
+
+end
+
+QuestFunctions.Cancel = function(player, action, data)
+	local char = player.Character
+	local status = char.Status
+	local characterData = char.Data
+	local plrGui = player.PlayerGui
+	local questGui = plrGui.QuestInfo
+
+	local quest = data.quest
+	local questModule = require(questModules[quest])
+
+	questModule.connectFinish(player)
+
+
+	characterData.Quests.Quest.Value = ""
+	characterData.Quests.Completion.Value = 0
+	questGui.Enabled = false
+	
+	
+	char.Events.QuestClient:FireClient(player, quest, "Destroy")
+
+	
+end
+
+QuestFunctions.Finish = function(player, action, data)
+	local char = player.Character
+	local status = char.Status
+	local characterData = char.Data
+	local plrGui = player.PlayerGui
+	local questGui = plrGui.QuestInfo
+
+	local quest = data.quest
+	local questModule = require(questModules[quest])
+	
+	questModule.connectFinish(player)
+	
+	
+	characterData.Quests.Quest.Value = ""
+	characterData.Quests.Completion.Value = 0
+	questGui.Enabled = false
+	
+	
+	char.Events.QuestClient:FireClient(player, quest, "Destroy")
+	
+
+end
+
+
+
+events.QuestProgression.Event:Connect(function(player, questName)
+	local char = player.Character
+	local completion = char.Data.Quests.Completion
+	
+	completion.Value += 1
+	player.PlayerGui.QuestInfo.Completion.TextBox.Text = completion.Value.."/"..questInfo.Quests[questName][char.Data.Quests.Stage.Value].Completion
+	
+	
+	if completion.Value == questInfo.Quests[questName][char.Data.Quests.Stage.Value].Completion then
+		QuestFunctions.Finish(player, "Finish", {quest = questName})
+	end
+	
+	
+	
+end)
+
+
+remotes.Quest.OnServerEvent:Connect(function(player, action, data)
+	print(action)
+	if validActions[action] == false then
+		return
+	end
+	--[[if type(data) ~= "table" then
+		return
+	end]]
+	
+	local PlayerData = player:FindFirstChild("Data")
+	if not PlayerData then
+		return
+	end
+	local QuestsFolder = PlayerData:FindFirstChild("Quests")
+	if not QuestsFolder then
+		return
+	end
+	local FoundAction = QuestFunctions[action]
+	print(FoundAction)
+	if FoundAction then
+		
+		FoundAction(player, action, data)
+		
+	end
+end)
